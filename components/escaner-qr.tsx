@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { hacerCheckin, type ResultadoCheckin } from "@/app/acciones";
+import { Avatar } from "@/components/avatar";
 
 // BarcodeDetector todavía no está en los tipos de TypeScript; declaramos lo que usamos.
 type DetectorDeCodigos = { detect(fuente: HTMLVideoElement): Promise<{ rawValue: string }[]> };
@@ -214,8 +215,19 @@ export function EscanerQr() {
                     ? `Check-in listo · ${resultado.hora}`
                     : `Ya tenía check-in desde las ${resultado.hora}`}
                 </p>
-                <p className="mt-1 text-xl font-semibold">{resultado.nombre}</p>
-                <p className="text-sm break-all text-tenue">{resultado.correo}</p>
+                <div className="mt-3 flex items-center gap-4">
+                  <Avatar nombre={resultado.nombre} foto={resultado.foto} tamano={88} />
+                  <div className="min-w-0">
+                    <p className="text-xl leading-tight font-semibold">{resultado.nombre}</p>
+                    <p className="mt-1 text-sm break-all text-tenue">{resultado.correo}</p>
+                  </div>
+                </div>
+                {/* Una captura del QR se puede reenviar: el nombre y la foto confirman quién es. */}
+                <p className="mt-3 text-sm text-tenue">
+                  {resultado.foto
+                    ? "¿Es la persona que muestra el pase? Compara la foto y el nombre."
+                    : "Esta cuenta no tiene foto: pide que te diga su nombre y compáralo."}
+                </p>
                 {resultado.sinInscripcion && (
                   <p className="mt-2 text-sm text-amber-200">
                     No había confirmado su asistencia: la registramos ahora.

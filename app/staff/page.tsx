@@ -91,8 +91,9 @@ function SinPermiso({ userId }: { userId: string }) {
         Tu cuenta todavía no tiene el rol <code className="text-texto">staff</code>. Quien organiza
         puede dártelo con <code className="text-texto">pnpm staff tu@correo.com</code> o desde el
         Dashboard de Clerk: <strong className="text-texto">Users</strong> → tu cuenta →{" "}
-        <strong className="text-texto">Public metadata</strong> →{" "}
-        <code className="text-texto">{`{"role": "staff"}`}</code>.
+        <strong className="text-texto">User metadata</strong> →{" "}
+        <strong className="text-texto">Public</strong> → <strong className="text-texto">Edit</strong>{" "}
+        y guarda <code className="text-texto">{`{"role": "staff"}`}</code>.
       </p>
       <p className="text-sm text-tenue">
         Tu código de cuenta: <code className="font-mono break-all text-texto">{userId}</code>

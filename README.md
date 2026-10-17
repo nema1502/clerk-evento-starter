@@ -134,7 +134,8 @@ El staff es quien hace check-in y descarga la lista. El rol vive en `publicMetad
 
    Así el servidor lee el rol directo del token, sin llamadas extra. Si todavía no lo agregaste
    (por ejemplo, con la app temporal sin reclamar), la plantilla lo consulta con `currentUser()`
-   y funciona igual, solo que con una llamada más a la API de Clerk por página.
+   y funciona igual, solo que con una llamada más a la API de Clerk por página (ojo con el
+   [límite de solicitudes](#límites-honestos) el día del evento).
 4. **Cierra sesión y vuelve a entrar** para que tu sesión tome el rol nuevo. En la cabecera
    aparecerá el enlace **Staff**.
 
@@ -148,12 +149,17 @@ patrón de `lib/roles.ts`.
    `http://192.168.x.x:3000` desde su celular, el escáner no funcionará.
 2. Cada persona del staff entra a `/staff` desde su celular con su cuenta.
 3. En la puerta, cada asistente muestra su pase (`/pase` o la captura de pantalla).
-4. Toca **Encender cámara** y apunta al QR: el check-in se hace solo y ves el nombre en grande.
+4. Toca **Encender cámara** y apunta al QR: el check-in se hace solo y ves en grande el nombre
+   y la foto de perfil (si la cuenta tiene una, por ejemplo al registrarse con Google).
    Si el mismo QR sigue frente a la cámara, se ignora unos segundos para no repetirlo.
-5. **Sin cámara** (iPhone, algunas computadoras o permiso denegado): escribe el código que
+5. **Compara la foto o el nombre con quien muestra el pase.** El QR es solo el código de la
+   cuenta, así que una captura se puede reenviar a otra persona. Si el check-in da derecho al
+   sorteo, pide que te diga su nombre antes de mirar la pantalla; si no coincide, toca
+   **Deshacer** en la lista.
+6. **Sin cámara** (iPhone, algunas computadoras o permiso denegado): escribe el código que
    aparece debajo del QR, o busca a la persona por nombre o correo en la lista y toca
    **Hacer check-in**. Si alguien se equivocó, **Deshacer** quita el check-in.
-6. Al final, **Exportar CSV** (todas las inscripciones) o **CSV solo con check-in** (quienes
+7. Al final, **Exportar CSV** (todas las inscripciones) o **CSV solo con check-in** (quienes
    llegaron). Cárgalo en Tinkazo u otra herramienta de sorteos, o ábrelo en Excel o Google
    Sheets. Las fechas van en la zona horaria del evento (`AAAA-MM-DD HH:mm`) y el archivo trae
    BOM UTF-8 para que Excel muestre bien las tildes.
@@ -164,6 +170,8 @@ iPhone), la app muestra solo el ingreso manual y la lista.
 
 Consejos: prueba el flujo completo un día antes con 2 o 3 cuentas, sube el brillo del celular
 de quien muestra el QR y ten la lista abierta en una segunda pantalla para buscar por nombre.
+Si el evento es grande, reclama la app y agrega el claim `metadata` **antes** de ese día (ver
+[Límites honestos](#límites-honestos)).
 
 ## Restringir por dominio de correo
 
@@ -188,13 +196,24 @@ pero en producción requiere un plan pago (Pro).
   **100 usuarios** y **100 correos al mes**. El panel de staff te avisa cuando te acercas al tope.
   Para un evento más grande, crea una instancia de **producción**, que necesita un **dominio
   propio** (no sirve `*.vercel.app`). Revisa los planes en <https://clerk.com/pricing>.
+- **Límite de solicitudes**: la Backend API de una instancia de desarrollo admite **100
+  solicitudes cada 10 segundos** por clave secreta (producción: 1000); si te pasas, responde
+  `429` y bloquea por unos segundos ([límites del sistema](https://clerk.com/docs/guides/how-clerk-works/system-limits)).
+  Sin el claim `metadata`, cada página con sesión gasta 1 solicitud para leer el rol (el panel
+  de staff, 2 más para la lista y el total) y cada check-in gasta 6 (rol, cuenta, escritura y
+  el panel actualizado); con el claim, 4. Para un meetup alcanza de sobra; si esperas una fila
+  larga en la puerta con varias personas de staff escaneando a la vez, **reclama la app y
+  agrega el claim `metadata` antes del día del evento**
+  ([Cómo hacerte staff](#cómo-hacerte-staff), paso 3). Si igual llegas al límite, el escáner
+  te avisa: espera unos segundos y vuelve a escanear.
 - **Sin base de datos**: el panel lee todas las cuentas de Clerk en cada carga (500 por llamada).
   Va perfecto para cientos de personas; para miles, guarda las inscripciones en una base de datos.
 - **Sin tiempo real**: si hay varias personas en el staff, cada una ve los check-ins de las demás
   al recargar o al hacer su siguiente check-in.
 - **Rol en el token**: si cambias el rol de alguien, debe cerrar sesión y volver a entrar.
 - **El QR es el `userId`**: no es secreto (sirve para identificar, no para iniciar sesión) y solo
-  el staff puede usarlo para hacer check-in.
+  el staff puede usarlo para hacer check-in. Como una captura se puede reenviar, el escáner
+  muestra el nombre y la foto de perfil para que el staff compare con quien muestra el pase.
 
 ## Deploy en Vercel
 
@@ -229,8 +248,12 @@ crea su propia app temporal y las cuentas, inscripciones y roles no se comparten
 - **Varios eventos**: guarda `eventos: { "meetup-octubre": { inscrito, checkin } }` en vez de
   un solo `evento`.
 - **Jurado de hackatón**: rol `jurado` y una página `/evaluar` con el patrón de `/staff`.
-- **Equipos**: activa Organizations (`pnpm dlx clerk@latest enable orgs`) y agrupa a las
-  personas por equipo.
+- **Equipos**: activa Organizations y agrupa a las personas por equipo (5 miembros por
+  organización por defecto; puedes subirlo hasta 20 sin pagar). Desde el Dashboard: página
+  **Organizations Settings** → **Enable Organizations**. Desde la terminal,
+  `pnpm dlx clerk@latest enable orgs` actúa sobre la app **vinculada**, así que con la app
+  temporal primero reclámala (`pnpm dlx clerk@latest auth login`) y vincula el proyecto
+  (`pnpm dlx clerk@latest link`).
 - **Certificados**: genera un PDF de asistencia para quienes tienen `checkin`.
 - **Avisos por correo**: escucha los webhooks de Clerk (`user.created`) para dar la bienvenida.
 
@@ -265,10 +288,12 @@ components/
   cabecera.tsx             Navegación con <Show> y <UserButton />
   escaner-qr.tsx           Cámara + BarcodeDetector + ingreso manual
   lista-inscripciones.tsx  Buscador, filtros y botones de check-in
+  avatar.tsx               Foto de perfil de Clerk o iniciales
 lib/
   evento.ts                Datos del evento y formato de fechas
   inscripciones.ts         Lectura de cuentas, metadata y dominios permitidos
   roles.ts                 esStaff(): rol desde el session token
+  usuario.ts               usuarioActual(): currentUser() con una sola llamada por request
 proxy.ts                   clerkMiddleware()
 types/globals.d.ts         Tipos del publicMetadata y del session token
 scripts/

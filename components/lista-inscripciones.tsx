@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deshacerCheckin, hacerCheckin } from "@/app/acciones";
+import { Avatar } from "@/components/avatar";
 import type { Persona } from "@/lib/inscripciones";
 
 const FILTROS = [
@@ -12,20 +13,25 @@ const FILTROS = [
 
 type Filtro = (typeof FILTROS)[number]["id"];
 
+// Color e ícono por tono: con apuro en la puerta, un error no debe parecer un check-in hecho.
+const TONOS_AVISO = {
+  ok: { color: "text-turquesa", icono: "✓" },
+  info: { color: "text-texto", icono: "↺" },
+  repetido: { color: "text-amber-200", icono: "!" },
+  error: { color: "text-red-300", icono: "✕" },
+};
+
+type Aviso = { texto: string; tono: keyof typeof TONOS_AVISO };
+
 function normalizar(texto: string) {
   return texto.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-}
-
-function iniciales(nombre: string) {
-  const partes = nombre.trim().split(/\s+/);
-  return ((partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
 export function ListaInscripciones({ personas }: { personas: Persona[] }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [procesando, setProcesando] = useState<string | null>(null);
-  const [aviso, setAviso] = useState("");
+  const [aviso, setAviso] = useState<Aviso | null>(null);
   const [, startTransition] = useTransition();
 
   const termino = normalizar(busqueda.trim());
@@ -42,24 +48,27 @@ export function ListaInscripciones({ personas }: { personas: Persona[] }) {
 
   function ejecutar(persona: Persona, accion: "checkin" | "deshacer") {
     setProcesando(persona.id);
-    setAviso("");
+    setAviso(null);
     startTransition(async () => {
       try {
         if (accion === "checkin") {
           const r = await hacerCheckin(persona.id);
           setAviso(
             r.estado === "error"
-              ? r.mensaje
+              ? { tono: "error", texto: r.mensaje }
               : r.estado === "repetido"
-                ? `${r.nombre} ya tenía check-in (${r.hora}).`
-                : `Check-in listo: ${r.nombre} (${r.hora}).`,
+                ? { tono: "repetido", texto: `${r.nombre} ya tenía check-in (${r.hora}).` }
+                : { tono: "ok", texto: `Check-in listo: ${r.nombre} (${r.hora}).` },
           );
         } else {
           await deshacerCheckin(persona.id);
-          setAviso(`Deshiciste el check-in de ${persona.nombre}.`);
+          setAviso({ tono: "info", texto: `Deshiciste el check-in de ${persona.nombre}.` });
         }
       } catch {
-        setAviso("No se pudo completar. Revisa tu conexión e inténtalo de nuevo.");
+        setAviso({
+          tono: "error",
+          texto: "No se pudo completar. Revisa tu conexión e inténtalo de nuevo.",
+        });
       } finally {
         setProcesando(null);
       }
@@ -107,8 +116,18 @@ export function ListaInscripciones({ personas }: { personas: Persona[] }) {
         ))}
       </div>
 
-      <p aria-live="polite" className="min-h-5 text-sm text-turquesa">
-        {aviso}
+      <p
+        aria-live="polite"
+        className={`flex min-h-5 gap-2 text-sm ${aviso ? TONOS_AVISO[aviso.tono].color : ""}`}
+      >
+        {aviso && (
+          <>
+            <span aria-hidden="true" className="w-3 shrink-0 text-center font-semibold">
+              {TONOS_AVISO[aviso.tono].icono}
+            </span>
+            <span>{aviso.texto}</span>
+          </>
+        )}
       </p>
 
       {visibles.length === 0 ? (
@@ -121,14 +140,13 @@ export function ListaInscripciones({ personas }: { personas: Persona[] }) {
         <ul className="flex flex-col divide-y divide-borde">
           {visibles.map((p) => (
             <li key={p.id} className="flex items-center gap-3 py-3">
-              <span
-                aria-hidden="true"
-                className={`grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold ${
-                  p.checkin ? "bg-turquesa/15 text-turquesa" : "bg-clerk/15 text-clerk-claro"
-                }`}
-              >
-                {iniciales(p.nombre)}
-              </span>
+              <Avatar
+                nombre={p.nombre}
+                foto={p.foto}
+                tamano={40}
+                decorativa
+                colores={p.checkin ? "bg-turquesa/15 text-turquesa" : undefined}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{p.nombre}</p>
                 <p className="truncate text-sm text-tenue">{p.correo}</p>

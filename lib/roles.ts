@@ -1,9 +1,10 @@
 import { cache } from "react";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { usuarioActual } from "@/lib/usuario";
 
 // El rol viaja en el session token (claim `metadata`, ver README → Staff), así que leerlo
-// no cuesta nada. Si todavía no agregaste ese claim, lo buscamos en la cuenta con
-// currentUser(): funciona igual, pero hace una llamada extra a la API de Clerk.
+// no cuesta nada. Si todavía no agregaste ese claim, lo buscamos en la cuenta: funciona
+// igual, pero gasta una llamada a la API de Clerk (compartida con la página que la necesite).
 export const esStaff = cache(async () => {
   const { isAuthenticated, sessionClaims } = await auth();
   if (!isAuthenticated) return false;
@@ -12,6 +13,6 @@ export const esStaff = cache(async () => {
     return sessionClaims.metadata.role === "staff";
   }
 
-  const user = await currentUser();
+  const user = await usuarioActual();
   return user?.publicMetadata.role === "staff";
 });

@@ -1,17 +1,19 @@
 import QRCode from "qrcode";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { cancelarAsistencia, confirmarAsistencia } from "@/app/acciones";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { EVENTO, fechaCorta, hora } from "@/lib/evento";
 import { correoDe, cuentaPermitida, dominiosPermitidos, nombreDe } from "@/lib/inscripciones";
+import { usuarioActual } from "@/lib/usuario";
 
 export const metadata = { title: "Mi pase" };
 
 export default async function PaginaPase() {
   // Sin sesión, auth.protect() te manda a /sign-in y luego te trae de vuelta.
   await auth.protect();
-  // currentUser() lee la cuenta fresca de la API: refleja la inscripción al instante.
-  const user = await currentUser();
+  // Lee la cuenta fresca de la API (refleja la inscripción al instante) con una sola
+  // llamada, compartida con la cabecera.
+  const user = await usuarioActual();
   if (!user) return null;
 
   const nombre = nombreDe(user);

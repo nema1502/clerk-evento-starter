@@ -3,7 +3,7 @@
 import { clerkClient, currentUser } from "@clerk/nextjs/server";
 import { refresh } from "next/cache";
 import { hora } from "@/lib/evento";
-import { correoDe, cuentaPermitida, nombreDe } from "@/lib/inscripciones";
+import { correoDe, cuentaPermitida, fotoDe, nombreDe } from "@/lib/inscripciones";
 import { esStaff } from "@/lib/roles";
 
 // Las Server Actions son endpoints públicos: cada una verifica la sesión y el rol en el
@@ -43,6 +43,8 @@ export type ResultadoCheckin =
       estado: "ok" | "repetido";
       nombre: string;
       correo: string;
+      // Foto de perfil (null si la cuenta no tiene) para comparar con quien muestra el QR.
+      foto: string | null;
       hora: string;
       sinInscripcion: boolean;
     }
@@ -54,7 +56,29 @@ function extraerUserId(codigo: string) {
   return codigo.match(/user_[A-Za-z0-9]{10,64}/)?.[0] ?? null;
 }
 
+// Código HTTP de un error de la Backend API de Clerk (404, 429…), si lo trae.
+function estadoHttp(error: unknown) {
+  return typeof error === "object" && error !== null && "status" in error
+    ? error.status
+    : undefined;
+}
+
 export async function hacerCheckin(codigo: string): Promise<ResultadoCheckin> {
+  try {
+    return await registrarCheckin(codigo);
+  } catch (error) {
+    // Con mucha gente en la puerta, la API de desarrollo puede responder 429 (README → Límites).
+    return {
+      estado: "error",
+      mensaje:
+        estadoHttp(error) === 429
+          ? "Clerk recibió demasiadas solicitudes seguidas. Espera unos segundos y vuelve a intentarlo."
+          : "No se pudo guardar el check-in. Revisa tu conexión e inténtalo de nuevo.",
+    };
+  }
+}
+
+async function registrarCheckin(codigo: string): Promise<ResultadoCheckin> {
   if (!(await esStaff())) {
     return { estado: "error", mensaje: "Solo el staff puede hacer check-in." };
   }
@@ -65,13 +89,17 @@ export async function hacerCheckin(codigo: string): Promise<ResultadoCheckin> {
   }
 
   const client = await clerkClient();
-  const user = await client.users.getUser(userId).catch(() => null);
+  // Solo un 404 significa "no existe"; otros errores (red, 429) suben al catch de arriba.
+  const user = await client.users.getUser(userId).catch((error: unknown) => {
+    if (estadoHttp(error) === 404) return null;
+    throw error;
+  });
   if (!user) {
     return { estado: "error", mensaje: "No encontramos ninguna cuenta con ese código." };
   }
 
   const evento = user.publicMetadata.evento;
-  const persona = { nombre: nombreDe(user), correo: correoDe(user) };
+  const persona = { nombre: nombreDe(user), correo: correoDe(user), foto: fotoDe(user) };
 
   if (evento?.checkin) {
     return { estado: "repetido", ...persona, hora: hora(evento.checkin), sinInscripcion: false };

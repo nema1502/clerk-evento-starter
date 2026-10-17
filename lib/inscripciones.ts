@@ -5,6 +5,7 @@ export type Persona = {
   id: string;
   nombre: string;
   correo: string;
+  foto: string | null;
   // Fechas en ISO 8601 (o null) y ya formateadas para mostrar en pantalla.
   inscrito: string | null;
   checkin: string | null;
@@ -21,12 +22,18 @@ export function nombreDe(user: User) {
   return nombre || correoDe(user).split("@")[0] || "Sin nombre";
 }
 
+// Sin foto propia, Clerk devuelve un avatar genérico: para reconocer a alguien no sirve.
+export function fotoDe(user: User) {
+  return user.hasImage ? user.imageUrl : null;
+}
+
 export function aPersona(user: User): Persona {
   const evento = user.publicMetadata.evento;
   return {
     id: user.id,
     nombre: nombreDe(user),
     correo: correoDe(user),
+    foto: fotoDe(user),
     inscrito: evento?.inscrito ?? null,
     checkin: evento?.checkin ?? null,
     inscritoTexto: fechaCorta(evento?.inscrito),
